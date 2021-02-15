@@ -1,3 +1,6 @@
 [submodule "minizip-ng"]
 	path = minizip-ng
 	url = https://github.com/zlib-ng/minizip-ng.git
+[submodule "tclap"]
+	path = tclap
+	url = https://github.com/mirror/tclap.git
