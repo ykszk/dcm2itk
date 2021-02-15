@@ -10,6 +10,17 @@
 #include <mz_zip.h>
 #include <mz_zip_rw.h>
 #include <filesystem>
+#include <tclap/CmdLine.h>
+#include <config.h>
+#include <cctype>
+
+struct Args {
+  std::string input;
+  std::string output;
+  std::string outdir;
+  std::string ext;
+};
+
 namespace fs = std::filesystem;
 using std::cout;
 using std::cerr;
@@ -22,7 +33,7 @@ public:
   void* zip_reader;
   void* file_stream;
   int32_t err;
-  ZipReader::ZipReader(char *path)
+  ZipReader::ZipReader(const char *path)
     : zip_reader(NULL), file_stream(NULL)
   {
     mz_zip_reader_create(&zip_reader);
@@ -40,8 +51,20 @@ public:
     mz_stream_os_delete(&file_stream);
     mz_zip_reader_delete(&zip_reader);
   }
-
 };
+
+fs::path get_available_name(const fs::path &dir, const std::string &stem, const std::string &ext)
+{
+  for (int i = 0; i < 10000; ++i) {
+    {
+      auto temp_dir = dir / (stem + std::to_string(i) + ext);
+      if (!fs::exists(temp_dir)) {
+        return temp_dir;
+      }
+    }
+  }
+  throw "Could not find available filename";
+}
 
 class TempDir
 {
@@ -59,22 +82,13 @@ public:
   static TempDir New()
   {
     auto base_temp_dir = fs::temp_directory_path();
-
-    for (int i = 0; i < 10000; ++i) {
-      {
-        auto temp_dir = base_temp_dir / ("tmpzip" + std::to_string(i));
-        if (!fs::exists(temp_dir)) {
-          return TempDir(temp_dir);
-        }
-      }
-    }
-    throw "Failed to find temporary directory";
+    return TempDir(get_available_name(base_temp_dir, "tmpzip", ""));
   }
 };
 using FileNamesContainer = std::vector<std::string>;
 
 template <typename PixelType, int Dimension>
-void _read_n_write(const FileNamesContainer &fileNames, const std::string outFileName, bool compress=true)
+void _read_n_write(const FileNamesContainer &fileNames, const std::string outFileName, bool compress = true)
 {
   using ImageType = itk::Image<PixelType, Dimension>;
 
@@ -126,15 +140,46 @@ int read_n_write(const FileNamesContainer &fileNames, const std::string outFileN
   }
 }
 
-int dir_input(int argc, char * argv[])
+const std::string& get_value(const itk::MetaDataDictionary &meta, const std::string &key)
 {
-  if (argc < 2)
-  {
-    cerr << "Usage: ";
-    cerr << argv[0] << " DicomDirectory[.zip]  [outputFileName  [seriesName]]";
-    return 1;
+  auto ptr = dynamic_cast<const itk::MetaDataObject<std::string> *>(meta.Get(key));
+  return ptr->GetMetaDataObjectValue();
+}
+bool has_value(const itk::MetaDataDictionary &meta, const std::string &key)
+{
+  return meta.HasKey(key) && get_value(meta, key) != "";
+}
+
+bool ends_with(const std::string& s, const std::string& suffix) {
+  if (s.size() < suffix.size()) return false;
+  return std::equal(std::rbegin(suffix), std::rend(suffix), std::rbegin(s));
+}
+
+void to_valid_filename(std::string &filename)
+{
+#ifdef _WIN32
+  std::string invalids("/\:*\"?<>|");
+#else
+  std::string invalids("/\:*\"?<>|");
+#endif
+  for (int i = 0; i < filename.size(); ++i) {
+    auto c = filename[i];
+    if (invalids.find(c) != std::string::npos) {
+      filename[i] = ' ';
+    }
   }
-  std::string dirName = argv[1];
+}
+std::string rstrip(const std::string s)
+{
+  auto end_it = s.rbegin();
+  while (std::isspace(*end_it))
+    ++end_it;
+  return std::string(s.begin(), end_it.base());
+}
+
+int dir_input(const Args &args)
+{
+  std::string dirName = args.input;
 
   using NamesGeneratorType = itk::GDCMSeriesFileNames;
   NamesGeneratorType::Pointer nameGenerator = NamesGeneratorType::New();
@@ -149,8 +194,8 @@ int dir_input(int argc, char * argv[])
   {
     using SeriesIdContainer = std::vector<std::string>;
     const SeriesIdContainer & seriesUID = nameGenerator->GetSeriesUIDs();
-    auto                      seriesItr = seriesUID.begin();
-    auto                      seriesEnd = seriesUID.end();
+    auto seriesItr = seriesUID.begin();
+    auto seriesEnd = seriesUID.end();
 
     if (seriesItr != seriesEnd)
     {
@@ -172,36 +217,54 @@ int dir_input(int argc, char * argv[])
     }
 
     seriesItr = seriesUID.begin();
+    int series_count = 0;
     while (seriesItr != seriesUID.end())
     {
-      std::string seriesIdentifier;
-      if (argc > 3) // If seriesIdentifier given convert only that
-      {
-        seriesIdentifier = argv[3];
-        seriesItr = seriesUID.end();
-      }
-      else // otherwise convert everything
-      {
-        seriesIdentifier = seriesItr->c_str();
-        seriesItr++;
-      }
-      cout << "\nReading: ";
-      cout << seriesIdentifier << endl;
+      std::string seriesIdentifier = seriesItr->c_str();
+      seriesItr++;
+      series_count++;
+      cout << "Reading: " << seriesIdentifier << endl;
       FileNamesContainer fileNames = nameGenerator->GetFileNames(seriesIdentifier);
-      std::string         outFileName;
-      if (argc > 2)
-      {
-        outFileName = argv[2];
-      }
-      else
-      {
-        outFileName = dirName + std::string("/") + seriesIdentifier + ".mha";
-      }
-
 
       auto imageio = itk::ImageIOFactory::CreateImageIO(fileNames.front().c_str(), itk::ImageIOFactory::FileModeType::ReadMode);
       imageio->SetFileName(fileNames.front());
       imageio->ReadImageInformation();
+      auto &meta = imageio->GetMetaDataDictionary();
+
+      std::string outFileName;
+      if (args.output != "")
+      {
+        if (series_count == 1) {
+          outFileName = args.output;
+        }
+        else {
+          fs::path output_path(args.output);
+          auto stem = output_path.stem().string();
+          auto ext = output_path.extension().string();
+          if (ends_with(args.output, ".nii.gz")) {
+            ext = ".nii.gz";
+            stem = std::string(args.output.c_str(), args.output.size() - 7);
+          }
+          outFileName = (output_path.parent_path() / (stem + std::to_string(series_count) + ext)).string();
+        }
+      }
+      else
+      {
+        std::string stem(seriesIdentifier);
+        if (has_value(meta, "0008|103e")) { // series description
+          stem = get_value(meta, "0008|103e");
+        }
+        else if (has_value(meta, "0020|0011")) { // series number
+          stem = get_value(meta, "0020|0011");
+        }
+        to_valid_filename(stem);
+        stem = rstrip(stem);
+        outFileName = (fs::path(args.outdir) / (stem + args.ext)).string();
+        if (fs::exists(outFileName)) {
+          outFileName = get_available_name(fs::path(args.outdir), stem, args.ext).string();
+        }
+      }
+
       auto dimension = imageio->GetNumberOfDimensions();
       auto componentType = imageio->GetComponentType();
       auto pixelType = imageio->GetPixelType();
@@ -221,12 +284,12 @@ int dir_input(int argc, char * argv[])
       }
       switch (dimension) {
       case 2:
-        return read_n_write<2>(fileNames, outFileName, componentType);
+        read_n_write<2>(fileNames, outFileName, componentType);
+        break;
       case 3:
-        return read_n_write<3>(fileNames, outFileName, componentType);
+        read_n_write<3>(fileNames, outFileName, componentType);
+        break;
       }
-
-      return 0;
     }
   }
   catch (itk::ExceptionObject & ex)
@@ -237,31 +300,59 @@ int dir_input(int argc, char * argv[])
   return EXIT_SUCCESS;
 }
 
-int zipped_input(int argc, char * argv[])
+int zipped_input(const Args &args)
 {
-  ZipReader reader(argv[1]);
+  ZipReader reader(args.input.c_str());
   if (reader.err != MZ_OK) {
     cerr << "MZ error:" << reader.err << endl;
-    return 1;
+    return EXIT_FAILURE;
   }
   auto temp_dir = TempDir::New();
   auto temp_dir_str = temp_dir.path.string();
   mz_zip_reader_save_all(reader.zip_reader, temp_dir_str.c_str());
-  argv[1] = temp_dir_str.data();
-  return dir_input(argc, argv);
+  Args new_args(args);
+  new_args.input = temp_dir_str;
+  auto parent = fs::path(args.input).parent_path();
+  new_args.outdir = parent.string();
+  return dir_input(new_args);
 }
 
 int main(int argc, char * argv[])
 {
-  if (argc < 2) {
-    return dir_input(argc, argv);
-  }
-  else {
-    if (fs::path(argv[1]).extension() == ".zip") {
-      return zipped_input(argc, argv);
+  Args args;
+  args.ext = ".nii.gz"; // default extension
+
+  try {
+    TCLAP::CmdLine cmd("Simple DICOM to ITK image converter", ' ', PROJECT_VERSION);
+
+    TCLAP::UnlabeledValueArg<std::string> inputDir("input", "Input directory or zip file containing dicom files", true, "", "input");
+    cmd.add(inputDir);
+    TCLAP::UnlabeledValueArg<std::string> output("output", "(optional) Output filename. Series name (series number if series name is missing) is used by default.", false, "", "output");
+    cmd.add(output);
+    TCLAP::ValueArg<std::string> extArg("e", "ext", "File extension. default: (" + args.ext + ")", false, args.ext, "ext");
+    cmd.add(extArg);
+
+    cmd.parse(argc, argv);
+
+    args.input = inputDir.getValue();
+    if (output.isSet()) {
+      args.output = output.getValue();
+      args.outdir = fs::path(args.output).parent_path().string();
     }
     else {
-      return dir_input(argc, argv);
+      args.outdir = fs::path(args.input).parent_path().string();
+    }
+    args.ext = extArg.getValue();
+    if (fs::path(argv[1]).extension() == ".zip") {
+      return zipped_input(args);
+    }
+    else {
+      return dir_input(args);
     }
   }
+  catch (TCLAP::ArgException &e)
+  {
+    std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl;
+  }
+  return 0;
 }

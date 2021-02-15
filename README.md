@@ -3,10 +3,15 @@
 ## Usage
 Specify DICOM containing directory
 ```sh
-dcm2itk dcm_dir output.mhd
+dcm2itk dcm_dir
 ```
 
 Specify zipped DICOM directory
 ```sh
-dcm2itk dcm_dir.zip output.mhd
+dcm2itk dcm_dir.zip
+```
+
+Specify file extension
+```sh
+dcm2itk dcm_dir --ext .mha
 ```
