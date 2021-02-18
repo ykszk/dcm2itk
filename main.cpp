@@ -343,7 +343,7 @@ int main(int argc, char * argv[])
       args.outdir = fs::path(args.input).parent_path().string();
     }
     args.ext = extArg.getValue();
-    if (fs::path(argv[1]).extension() == ".zip") {
+    if (fs::path(args.input).extension() == ".zip") {
       return zipped_input(args);
     }
     else {
