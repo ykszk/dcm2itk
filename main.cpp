@@ -312,8 +312,6 @@ int zipped_input(const Args &args)
   mz_zip_reader_save_all(reader.zip_reader, temp_dir_str.c_str());
   Args new_args(args);
   new_args.input = temp_dir_str;
-  auto parent = fs::path(args.input).parent_path();
-  new_args.outdir = parent.string();
   return dir_input(new_args);
 }
 
@@ -329,6 +327,8 @@ int main(int argc, char * argv[])
     cmd.add(inputDir);
     TCLAP::UnlabeledValueArg<std::string> output("output", "(optional) Output filename. Series name (series number if series name is missing) is used by default.", false, "", "output");
     cmd.add(output);
+    TCLAP::ValueArg<std::string> outdir("", "outdir", "(optional) Output directory. default: working directory.", false, "", "dirname");
+    cmd.add(outdir);
     TCLAP::ValueArg<std::string> extArg("e", "ext", "File extension. default: (" + args.ext + ")", false, args.ext, "ext");
     cmd.add(extArg);
 
@@ -338,9 +338,17 @@ int main(int argc, char * argv[])
     if (output.isSet()) {
       args.output = output.getValue();
       args.outdir = fs::path(args.output).parent_path().string();
+      if (outdir.isSet()) {
+        cout << "Warning: <outdir>=<" << outdir.getValue() << "> is ignored." << endl;
+      }
     }
     else {
-      args.outdir = fs::path(args.input).parent_path().string();
+      if (outdir.isSet()) {
+        args.outdir = outdir.getValue();
+      }
+      else {
+        args.outdir = fs::path(args.input).parent_path().string();
+      }
     }
     args.ext = extArg.getValue();
     if (fs::path(args.input).extension() == ".zip") {
