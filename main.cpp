@@ -57,7 +57,7 @@ fs::path get_available_name(const fs::path &dir, const std::string &stem, const 
 {
   for (int i = 0; i < 10000; ++i) {
     {
-      auto temp_dir = dir / (stem + std::to_string(i) + ext);
+      auto temp_dir = dir / (stem + "_(" + std::to_string(i) + ")" + ext);
       if (!fs::exists(temp_dir)) {
         return temp_dir;
       }
@@ -245,7 +245,7 @@ int dir_input(const Args &args)
             ext = ".nii.gz";
             stem = std::string(args.output.c_str(), args.output.size() - 7);
           }
-          outFileName = (output_path.parent_path() / (stem + std::to_string(series_count) + ext)).string();
+          outFileName = (output_path.parent_path() / (stem + "_(" + std::to_string(series_count) + ")" + ext)).string();
         }
       }
       else
