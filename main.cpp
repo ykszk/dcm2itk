@@ -351,6 +351,17 @@ int main(int argc, char * argv[])
       }
     }
     args.ext = extArg.getValue();
+
+
+    if (!fs::exists(args.input)) {
+      cerr << "Fatal error: Could not find input(" << args.input << ")." << endl;
+      return EXIT_FAILURE;
+    }
+    if (args.outdir!="" && !fs::exists(args.outdir)) {
+      cerr << "Fatal error: Could not find outdir(" << args.outdir << ")." << endl;
+      return EXIT_FAILURE;
+    }
+
     if (fs::path(args.input).extension() == ".zip") {
       return zipped_input(args);
     }
