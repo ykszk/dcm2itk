@@ -119,9 +119,12 @@ void _read_n_write(const FileNamesContainer &fileNames, const std::string outFil
 template <int Dimension>
 int read_n_write(const FileNamesContainer &fileNames, const std::string outFileName, itk::ImageIOBase::IOComponentType componentType)
 {
-  /// SHORT -> SHORT, INT -> SHORT, FLOAT -> FLOAT, DOUBLE -> FLOAT
+  /// UINT8 -> UINT8, SHORT -> SHORT, INT -> SHORT, FLOAT -> FLOAT, DOUBLE -> FLOAT
   constexpr int dim = Dimension;
   switch (componentType) {
+  case itk::ImageIOBase::UCHAR:
+    _read_n_write<uint8_t, dim>(fileNames, outFileName);
+    return 0;
   case itk::ImageIOBase::SHORT:
     _read_n_write<int16_t, dim>(fileNames, outFileName);
     return 0;
