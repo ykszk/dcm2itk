@@ -33,7 +33,7 @@ public:
   void* zip_reader;
   void* file_stream;
   int32_t err;
-  ZipReader::ZipReader(const char *path)
+  ZipReader(const char *path)
     : zip_reader(NULL), file_stream(NULL)
   {
     mz_zip_reader_create(&zip_reader);
@@ -45,7 +45,7 @@ public:
     }
   }
 
-  ZipReader::~ZipReader()
+  ~ZipReader()
   {
     mz_zip_reader_close(zip_reader);
     mz_stream_os_delete(&file_stream);
@@ -70,12 +70,12 @@ class TempDir
 {
 public:
   fs::path path;
-  TempDir::TempDir(const fs::path &p)
+  TempDir(const fs::path &p)
   {
     path = p;
     fs::create_directories(p);
   }
-  TempDir::~TempDir()
+  ~TempDir()
   {
     fs::remove_all(path);
   }
@@ -93,7 +93,7 @@ void _read_n_write(const FileNamesContainer &fileNames, const std::string outFil
   using ImageType = itk::Image<PixelType, Dimension>;
 
   using ReaderType = itk::ImageSeriesReader<ImageType>;
-  ReaderType::Pointer reader = ReaderType::New();
+  typename ReaderType::Pointer reader = ReaderType::New();
   using ImageIOType = itk::GDCMImageIO;
   ImageIOType::Pointer dicomIO = ImageIOType::New();
   reader->SetImageIO(dicomIO);
@@ -101,7 +101,7 @@ void _read_n_write(const FileNamesContainer &fileNames, const std::string outFil
   reader->ForceOrthogonalDirectionOff(); // properly read CTs with gantry tilt
 
   using WriterType = itk::ImageFileWriter<ImageType>;
-  WriterType::Pointer writer = WriterType::New();
+  typename WriterType::Pointer writer = WriterType::New();
   writer->SetFileName(outFileName);
   writer->SetUseCompression(compress);
   writer->SetInput(reader->GetOutput());
@@ -163,7 +163,7 @@ void to_valid_filename(std::string &filename)
 #ifdef _WIN32
   std::string invalids("/\:*\"?<>|");
 #else
-  std::string invalids("/\:*\"?<>|");
+  std::string invalids("/:*\"?<>|");
 #endif
   for (int i = 0; i < filename.size(); ++i) {
     auto c = filename[i];
