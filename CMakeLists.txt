@@ -5,13 +5,33 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON) 
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_subdirectory(minizip-ng)
-
+SET(ITK_DIR "${CMAKE_SOURCE_DIR}/deps/build/ITK")
 find_package(ITK REQUIRED)
 include(${ITK_USE_FILE})
-include_directories(tclap/include)
+include_directories(deps/tclap/include)
+
+SET(ZLIB_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/deps/zlib-ng;${CMAKE_SOURCE_DIR}/deps/build/zlib-ng")
+SET(ZLIB_LIBRARY_DEBUG "${CMAKE_SOURCE_DIR}/deps/build/zlib-ng/Debug/zlibstaticd.lib")
+SET(ZLIB_LIBRARY_RELEASE "${CMAKE_SOURCE_DIR}/deps/build/zlib-ng/Release/zlibstatic.lib")
+
+SET(ZLIB_COMPAT ON CACHE BOOL "COMPAT")
+SET(MZ_COMPAT OFF CACHE BOOL "Disable")
+#SET(MZ_ZLIB OFF CACHE BOOL "Disable")
+SET(MZ_BZIP2 OFF CACHE BOOL "Disable")
+SET(MZ_LZMA OFF CACHE BOOL "Disable")
+SET(MZ_ZSTD OFF CACHE BOOL "Disable")
+# SET(MZ_PKCRYPT OFF CACHE BOOL "Disable")
+SET(MZ_WZAES OFF CACHE BOOL "Disable")
+SET(MZ_OPENSSL OFF CACHE BOOL "Disable")
+SET(MZ_LIBBSD OFF CACHE BOOL "Disable")
+SET(MZ_ICONV OFF CACHE BOOL "Disable")
+#SET(MZ_SIGNING OFF CACHE BOOL "Disable")
+add_subdirectory(deps/minizip-ng)
 
 configure_file(config.h.in config.h @ONLY)
 include_directories("${PROJECT_BINARY_DIR}") # for config.h
 add_executable(dcm2itk main.cpp)
 target_link_libraries(dcm2itk ${ITK_LIBRARIES} minizip)
+
+add_executable(calcsuv calcsuv.cpp)
+target_link_libraries(calcsuv ${ITK_LIBRARIES})

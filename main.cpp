@@ -4,6 +4,8 @@
 #include <itkImageIOFactory.h>
 #include "itkImageSeriesReader.h"
 #include "itkImageFileWriter.h"
+#include <gdcmReader.h>
+#include "gdcmStringFilter.h"
 #include <mz.h>
 #include <mz_strm.h>
 #include <mz_strm_os.h>
@@ -18,6 +20,7 @@ struct Args {
   std::string input;
   std::string output;
   std::string outdir;
+  std::string tmpdir;
   std::string ext;
 };
 
@@ -84,12 +87,31 @@ public:
     auto base_temp_dir = fs::temp_directory_path();
     return TempDir(get_available_name(base_temp_dir, "tmpzip", ""));
   }
+  static TempDir New(const std::string &tmpdir)
+  {
+    return TempDir(get_available_name(tmpdir, "tmpzip", ""));
+  }
 };
 using FileNamesContainer = std::vector<std::string>;
 
+std::string get_string(const gdcm::DataSet &dataset, const gdcm::Tag &tag) {
+  auto elm = dataset.GetDataElement(tag);
+  std::string str(elm.GetByteValue()->GetPointer(), elm.GetVL());
+  return str;
+}
 template <typename PixelType, int Dimension>
 void _read_n_write(const FileNamesContainer &fileNames, const std::string outFileName, bool compress = true)
 {
+//  auto imageio = itk::ImageIOFactory::CreateImageIO(fileNames.front().c_str(), itk::ImageIOFactory::FileModeType::ReadMode);
+  auto imageio = itk::GDCMImageIO::New();
+  imageio->LoadPrivateTagsDefaultOn();
+  imageio->LoadPrivateTagsOn();
+  imageio->SetFileName(fileNames.front());
+  imageio->ReadImageInformation();
+
+  auto &meta = imageio->GetMetaDataDictionary();
+  auto modality = get_value(meta, "0008|0060");
+  auto units = get_value(meta, "0054|1001");
   using ImageType = itk::Image<PixelType, Dimension>;
 
   using ReaderType = itk::ImageSeriesReader<ImageType>;
@@ -100,11 +122,20 @@ void _read_n_write(const FileNamesContainer &fileNames, const std::string outFil
   reader->SetFileNames(fileNames);
   reader->ForceOrthogonalDirectionOff(); // properly read CTs with gantry tilt
 
+  auto image = reader->GetOutput();
+  if (modality == "PT") {
+    for (auto& filename : fileNames) {
+      {
+      }
+    }
+  }
+  return;
+
   using WriterType = itk::ImageFileWriter<ImageType>;
   typename WriterType::Pointer writer = WriterType::New();
   writer->SetFileName(outFileName);
   writer->SetUseCompression(compress);
-  writer->SetInput(reader->GetOutput());
+  writer->SetInput(image);
   cout << "Writing: " << outFileName << endl;
   try
   {
@@ -143,9 +174,10 @@ int read_n_write(const FileNamesContainer &fileNames, const std::string outFileN
   }
 }
 
-const std::string& get_value(const itk::MetaDataDictionary &meta, const std::string &key)
+template <typename ValueType = std::string>
+const ValueType& get_value(const itk::MetaDataDictionary &meta, const std::string &key)
 {
-  auto ptr = dynamic_cast<const itk::MetaDataObject<std::string> *>(meta.Get(key));
+  auto ptr = dynamic_cast<const itk::MetaDataObject<ValueType> *>(meta.Get(key));
   return ptr->GetMetaDataObjectValue();
 }
 bool has_value(const itk::MetaDataDictionary &meta, const std::string &key)
@@ -310,7 +342,7 @@ int zipped_input(const Args &args)
     cerr << "MZ error:" << reader.err << endl;
     return EXIT_FAILURE;
   }
-  auto temp_dir = TempDir::New();
+  auto temp_dir = TempDir::New(args.tmpdir);
   auto temp_dir_str = temp_dir.path.string();
   mz_zip_reader_save_all(reader.zip_reader, temp_dir_str.c_str());
   Args new_args(args);
@@ -332,6 +364,8 @@ int main(int argc, char * argv[])
     cmd.add(output);
     TCLAP::ValueArg<std::string> outdir("", "outdir", "(optional) Output directory. default: working directory.", false, "", "dirname");
     cmd.add(outdir);
+    TCLAP::ValueArg<std::string> tmpdir("", "tmpdir", "(optional) Temporary directory.", false, "", "dirname");
+    cmd.add(tmpdir);
     TCLAP::ValueArg<std::string> extArg("e", "ext", "File extension. default: (" + args.ext + ")", false, args.ext, "ext");
     cmd.add(extArg);
 
@@ -354,6 +388,12 @@ int main(int argc, char * argv[])
       }
     }
     args.ext = extArg.getValue();
+    if (tmpdir.isSet()) {
+        args.tmpdir = tmpdir.getValue();
+    }
+    else {
+      args.tmpdir = "";
+    }
 
 
     if (!fs::exists(args.input)) {
