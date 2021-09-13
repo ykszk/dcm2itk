@@ -26,12 +26,13 @@ SET(MZ_OPENSSL OFF CACHE BOOL "Disable")
 SET(MZ_LIBBSD OFF CACHE BOOL "Disable")
 SET(MZ_ICONV OFF CACHE BOOL "Disable")
 #SET(MZ_SIGNING OFF CACHE BOOL "Disable")
-add_subdirectory(deps/minizip-ng)
+add_subdirectory(${CMAKE_SOURCE_DIR}/deps/minizip-ng)
 
 configure_file(config.h.in config.h @ONLY)
 include_directories("${PROJECT_BINARY_DIR}") # for config.h
+add_library(utils STATIC utils.cpp utils.h)
 add_executable(dcm2itk main.cpp)
-target_link_libraries(dcm2itk ${ITK_LIBRARIES} minizip)
+target_link_libraries(dcm2itk utils ${ITK_LIBRARIES} minizip)
 
 add_executable(calcsuv calcsuv.cpp)
-target_link_libraries(calcsuv ${ITK_LIBRARIES})
+target_link_libraries(calcsuv utils ${ITK_LIBRARIES})
