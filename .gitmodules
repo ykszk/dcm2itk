@@ -7,3 +7,6 @@
 [submodule "deps/tclap"]
 	path = deps/tclap
 	url = git@github.com:mirror/tclap.git
+[submodule "deps/ITK"]
+	path = deps/ITK
+	url = git@github.com:InsightSoftwareConsortium/ITK.git
