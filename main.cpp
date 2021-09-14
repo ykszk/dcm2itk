@@ -23,6 +23,7 @@ struct Args {
   std::string outdir;
   std::string tmpdir;
   std::string ext;
+  bool compress;
 };
 
 namespace fs = std::filesystem;
@@ -137,7 +138,7 @@ void _read_n_write(const FileNamesContainer& fileNames, const std::string outFil
 }
 
 template <int Dimension>
-int read_n_write(const FileNamesContainer& fileNames, const std::string outFileName, itk::ImageIOBase::IOComponentType componentType)
+int read_n_write(const FileNamesContainer& fileNames, const std::string outFileName, itk::ImageIOBase::IOComponentType componentType, bool compress)
 {
   /// UINT8 -> UINT8, SHORT -> SHORT, INT -> SHORT, FLOAT -> FLOAT, DOUBLE -> FLOAT
   constexpr int dim = Dimension;
@@ -152,10 +153,10 @@ int read_n_write(const FileNamesContainer& fileNames, const std::string outFileN
     _read_n_write<int16_t, dim>(fileNames, outFileName);
     return 0;
   case itk::ImageIOBase::FLOAT:
-    _read_n_write<float, dim>(fileNames, outFileName, false);
+    _read_n_write<float, dim>(fileNames, outFileName, compress | false);
     return 0;
   case itk::ImageIOBase::DOUBLE:
-    _read_n_write<float, dim>(fileNames, outFileName, false);
+    _read_n_write<float, dim>(fileNames, outFileName, compress | false);
     return 0;
   default:
     cerr << "Unsupported component type:" << itk::ImageIOBase::GetComponentTypeAsString(componentType) << endl;
@@ -338,10 +339,10 @@ int dir_input(const Args& args)
       }
       switch (dimension) {
       case 2:
-        read_n_write<2>(fileNames, outFileName, componentType);
+        read_n_write<2>(fileNames, outFileName, componentType, args.compress);
         break;
       case 3:
-        read_n_write<3>(fileNames, outFileName, componentType);
+        read_n_write<3>(fileNames, outFileName, componentType, args.compress);
         break;
       }
     }
@@ -387,6 +388,7 @@ int main(int argc, char* argv[])
     cmd.add(tmpdir);
     TCLAP::ValueArg<std::string> extArg("e", "ext", "File extension. default: (" + args.ext + ")", false, args.ext, "ext");
     cmd.add(extArg);
+    TCLAP::SwitchArg compressSwitch("","compress","Force compression.", cmd, false);
 
     cmd.parse(argc, argv);
 
@@ -407,6 +409,7 @@ int main(int argc, char* argv[])
       }
     }
     args.ext = extArg.getValue();
+    args.compress = compressSwitch;
     if (tmpdir.isSet()) {
       args.tmpdir = tmpdir.getValue();
     }
