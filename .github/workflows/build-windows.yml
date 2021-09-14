@@ -19,12 +19,15 @@ jobs:
         submodules: recursive
 
     - name: Build zlib
+      shell: cmd
       run: build_deps.bat
 
     - name: Build ITK
+      shell: cmd
       run: build_deps.bat
 
     - name: Build binary
+      shell: cmd
       run: build.bat
 
     - name: Zip
