@@ -1,6 +1,6 @@
 #ifndef UTILS_H
 #define UTILS_H
-#include <gdcmReader.h>
+#include <gdcmFile.h>
 
 std::string get_string(const gdcm::DataSet& dataset, const gdcm::Tag& tag);
 

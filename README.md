@@ -11,11 +11,21 @@ Specify zipped DICOM directory
 dcm2itk dcm_dir.zip
 ```
 
+Specify output filename
+```sh
+dcm2itk dcm_dir output.mha
+```
+
 Specify file extension
 ```sh
 dcm2itk dcm_dir --ext .mha
 ```
 
+## calcsuv
+Calculate SUVbwScaleFactor
+```
+calcsuv pet.dcm --output suv.dcm
+```
 
 ## BUILD
 
@@ -24,4 +34,6 @@ rem build zlib
 build_deps.bat
 rem build itk
 build_deps.bat
+rem build exe
+build.bat
 ```

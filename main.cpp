@@ -153,8 +153,6 @@ int read_n_write(const FileNamesContainer& fileNames, const std::string outFileN
     _read_n_write<int16_t, dim>(fileNames, outFileName);
     return 0;
   case itk::ImageIOBase::FLOAT:
-    _read_n_write<float, dim>(fileNames, outFileName, compress | false);
-    return 0;
   case itk::ImageIOBase::DOUBLE:
     _read_n_write<float, dim>(fileNames, outFileName, compress | false);
     return 0;
@@ -183,7 +181,7 @@ bool ends_with(const std::string& s, const std::string& suffix) {
 void to_valid_filename(std::string& filename)
 {
 #ifdef _WIN32
-  std::string invalids("/\:*\"?<>|");
+  std::string invalids("/:*\"?<>|");
 #else
   std::string invalids("/:*\"?<>|");
 #endif

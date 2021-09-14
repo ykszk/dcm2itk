@@ -2,7 +2,6 @@
 #include <gdcmImageReader.h>
 #include <gdcmWriter.h>
 #include <tclap/CmdLine.h>
-#include <cctype>
 #include "config.h"
 #include "utils.h"
 
@@ -28,7 +27,7 @@ int main(int argc, char* argv[])
       cerr << "Could not read: " << input_filename << std::endl;
       return 1;
     }
-    auto dcm = reader.GetFile();
+    auto &dcm = reader.GetFile();
     auto modality = get_string(dcm.GetDataSet(), tags::modality);
     if (modality != "PT") {
       cerr << "Not a PET image." << endl;
