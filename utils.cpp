@@ -51,8 +51,8 @@ time_t datetime2time_t(const std::string& date, const std::string& time)
 }
 
 double calculate_bw_factor(const gdcm::File& file, bool verbose) {
-  auto dataset = file.GetDataSet();
-  auto data = dataset.GetDataElement(tags::pharma);
+  const auto &dataset = file.GetDataSet();
+  const auto &data = dataset.GetDataElement(tags::pharma);
   if (data.IsEmpty()) {
     throw std::runtime_error("Phama info (0054, 0016) not found.");
   }
@@ -95,12 +95,23 @@ double calculate_bw_factor(const gdcm::File& file, bool verbose) {
 }
 
 void rescale_slope(gdcm::File& dcm, double factor) {
-  auto dataset = dcm.GetDataSet();
+  auto &dataset = dcm.GetDataSet();
   auto intercept = std::stof(get_string(dataset, tags::rescale_intercept));
   auto slope = std::stof(get_string(dataset, tags::rescale_slope));
   auto scaled_slope = factor * slope;
   auto elm = dataset.GetDataElement(tags::rescale_slope);
+  // (0028, 1053) Rescale slope
+  // Decimal String (DS). 16 bytes maximum
   auto str_scaled_slope = std::to_string(scaled_slope);
+  for (int precision = 10; precision > 0; precision--) {
+    std::stringstream stream;
+    stream << std::scientific << std::setprecision(precision) << scaled_slope;
+    std::string ss = stream.str();
+    if (ss.length() <= 16) {
+      str_scaled_slope = ss;
+      break;
+    }
+  }
   elm.SetByteValue(str_scaled_slope.c_str(), str_scaled_slope.length());
   dataset.Replace(elm);
   dcm.SetDataSet(dataset);

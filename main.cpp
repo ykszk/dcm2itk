@@ -5,7 +5,7 @@
 #include "itkImageSeriesReader.h"
 #include "itkImageFileWriter.h"
 #include <gdcmReader.h>
-#include "gdcmStringFilter.h"
+#include <gdcmWriter.h>
 #include <mz.h>
 #include <mz_strm.h>
 #include <mz_strm_os.h>
@@ -15,6 +15,7 @@
 #include <tclap/CmdLine.h>
 #include <config.h>
 #include <cctype>
+#include "utils.h"
 
 struct Args {
   std::string input;
@@ -36,7 +37,7 @@ public:
   void* zip_reader;
   void* file_stream;
   int32_t err;
-  ZipReader(const char *path)
+  ZipReader(const char* path)
     : zip_reader(NULL), file_stream(NULL)
   {
     mz_zip_reader_create(&zip_reader);
@@ -56,7 +57,7 @@ public:
   }
 };
 
-fs::path get_available_name(const fs::path &dir, const std::string &stem, const std::string &ext)
+fs::path get_available_name(const fs::path& dir, const std::string& stem, const std::string& ext)
 {
   for (int i = 0; i < 10000; ++i) {
     {
@@ -73,7 +74,7 @@ class TempDir
 {
 public:
   fs::path path;
-  TempDir(const fs::path &p)
+  TempDir(const fs::path& p)
   {
     path = p;
     fs::create_directories(p);
@@ -87,31 +88,29 @@ public:
     auto base_temp_dir = fs::temp_directory_path();
     return TempDir(get_available_name(base_temp_dir, "tmpzip", ""));
   }
-  static TempDir New(const std::string &tmpdir)
+  static TempDir New(const std::string& tmpdir)
   {
-    return TempDir(get_available_name(tmpdir, "tmpzip", ""));
+    if (tmpdir.empty()) {
+      return New();
+    }
+    else {
+      return TempDir(get_available_name(tmpdir, "tmpzip", ""));
+    }
   }
 };
 using FileNamesContainer = std::vector<std::string>;
 
-std::string get_string(const gdcm::DataSet &dataset, const gdcm::Tag &tag) {
-  auto elm = dataset.GetDataElement(tag);
-  std::string str(elm.GetByteValue()->GetPointer(), elm.GetVL());
-  return str;
-}
 template <typename PixelType, int Dimension>
-void _read_n_write(const FileNamesContainer &fileNames, const std::string outFileName, bool compress = true)
+void _read_n_write(const FileNamesContainer& fileNames, const std::string outFileName, bool compress = true)
 {
-//  auto imageio = itk::ImageIOFactory::CreateImageIO(fileNames.front().c_str(), itk::ImageIOFactory::FileModeType::ReadMode);
+  //  auto imageio = itk::ImageIOFactory::CreateImageIO(fileNames.front().c_str(), itk::ImageIOFactory::FileModeType::ReadMode);
   auto imageio = itk::GDCMImageIO::New();
   imageio->LoadPrivateTagsDefaultOn();
   imageio->LoadPrivateTagsOn();
   imageio->SetFileName(fileNames.front());
   imageio->ReadImageInformation();
 
-  auto &meta = imageio->GetMetaDataDictionary();
-  auto modality = get_value(meta, "0008|0060");
-  auto units = get_value(meta, "0054|1001");
+  auto& meta = imageio->GetMetaDataDictionary();
   using ImageType = itk::Image<PixelType, Dimension>;
 
   using ReaderType = itk::ImageSeriesReader<ImageType>;
@@ -121,34 +120,24 @@ void _read_n_write(const FileNamesContainer &fileNames, const std::string outFil
   reader->SetImageIO(dicomIO);
   reader->SetFileNames(fileNames);
   reader->ForceOrthogonalDirectionOff(); // properly read CTs with gantry tilt
-
-  auto image = reader->GetOutput();
-  if (modality == "PT") {
-    for (auto& filename : fileNames) {
-      {
-      }
-    }
-  }
-  return;
-
   using WriterType = itk::ImageFileWriter<ImageType>;
   typename WriterType::Pointer writer = WriterType::New();
   writer->SetFileName(outFileName);
   writer->SetUseCompression(compress);
-  writer->SetInput(image);
+  writer->SetInput(reader->GetOutput());
   cout << "Writing: " << outFileName << endl;
   try
   {
     writer->Update();
   }
-  catch (itk::ExceptionObject & ex)
+  catch (itk::ExceptionObject& ex)
   {
     cerr << ex << endl;
   }
 }
 
 template <int Dimension>
-int read_n_write(const FileNamesContainer &fileNames, const std::string outFileName, itk::ImageIOBase::IOComponentType componentType)
+int read_n_write(const FileNamesContainer& fileNames, const std::string outFileName, itk::ImageIOBase::IOComponentType componentType)
 {
   /// UINT8 -> UINT8, SHORT -> SHORT, INT -> SHORT, FLOAT -> FLOAT, DOUBLE -> FLOAT
   constexpr int dim = Dimension;
@@ -175,12 +164,12 @@ int read_n_write(const FileNamesContainer &fileNames, const std::string outFileN
 }
 
 template <typename ValueType = std::string>
-const ValueType& get_value(const itk::MetaDataDictionary &meta, const std::string &key)
+const ValueType& get_value(const itk::MetaDataDictionary& meta, const std::string& key)
 {
-  auto ptr = dynamic_cast<const itk::MetaDataObject<ValueType> *>(meta.Get(key));
+  auto ptr = dynamic_cast<const itk::MetaDataObject<ValueType>*>(meta.Get(key));
   return ptr->GetMetaDataObjectValue();
 }
-bool has_value(const itk::MetaDataDictionary &meta, const std::string &key)
+bool has_value(const itk::MetaDataDictionary& meta, const std::string& key)
 {
   return meta.HasKey(key) && get_value(meta, key) != "";
 }
@@ -190,7 +179,7 @@ bool ends_with(const std::string& s, const std::string& suffix) {
   return std::equal(std::rbegin(suffix), std::rend(suffix), std::rbegin(s));
 }
 
-void to_valid_filename(std::string &filename)
+void to_valid_filename(std::string& filename)
 {
 #ifdef _WIN32
   std::string invalids("/\:*\"?<>|");
@@ -212,7 +201,7 @@ std::string rstrip(const std::string s)
   return std::string(s.begin(), end_it.base());
 }
 
-int dir_input(const Args &args)
+int dir_input(const Args& args)
 {
   std::string dirName = args.input;
 
@@ -228,7 +217,7 @@ int dir_input(const Args &args)
   try
   {
     using SeriesIdContainer = std::vector<std::string>;
-    const SeriesIdContainer & seriesUID = nameGenerator->GetSeriesUIDs();
+    const SeriesIdContainer& seriesUID = nameGenerator->GetSeriesUIDs();
     auto seriesItr = seriesUID.begin();
     auto seriesEnd = seriesUID.end();
 
@@ -264,7 +253,37 @@ int dir_input(const Args &args)
       auto imageio = itk::ImageIOFactory::CreateImageIO(fileNames.front().c_str(), itk::ImageIOFactory::FileModeType::ReadMode);
       imageio->SetFileName(fileNames.front());
       imageio->ReadImageInformation();
-      auto &meta = imageio->GetMetaDataDictionary();
+      auto& meta = imageio->GetMetaDataDictionary();
+      auto modality = get_value(meta, "0008|0060");
+      auto units = get_value(meta, "0054|1001");
+      if (modality == "PT") {
+        cout << "Convert to SUV" << endl;
+        for (auto& filename : fileNames) {
+          gdcm::Reader reader;
+          reader.SetFileName(filename.c_str());
+          if (!reader.Read())
+          {
+            cerr << "Could not read: " << filename << std::endl;
+            return EXIT_FAILURE;
+          }
+          auto& dcm = reader.GetFile();
+          auto modality = get_string(dcm.GetDataSet(), tags::modality);
+          if (modality != "PT") {
+            cerr << "Not a PET image." << endl;
+            return EXIT_FAILURE;
+          }
+          auto SUVbwScaleFactor = calculate_bw_factor(dcm, false);
+          rescale_slope(dcm, SUVbwScaleFactor);
+          gdcm::Writer writer;
+          writer.CheckFileMetaInformationOff();
+          writer.SetFileName(filename.c_str());
+          writer.SetFile(dcm);
+          if (!writer.Write()) {
+            cerr << "Could not write: " << filename << std::endl;
+            return EXIT_FAILURE;
+          };
+        }
+      }
 
       std::string outFileName;
       if (args.output != "")
@@ -327,7 +346,7 @@ int dir_input(const Args &args)
       }
     }
   }
-  catch (itk::ExceptionObject & ex)
+  catch (itk::ExceptionObject& ex)
   {
     cout << ex << endl;
     return EXIT_FAILURE;
@@ -335,7 +354,7 @@ int dir_input(const Args &args)
   return EXIT_SUCCESS;
 }
 
-int zipped_input(const Args &args)
+int zipped_input(const Args& args)
 {
   ZipReader reader(args.input.c_str());
   if (reader.err != MZ_OK) {
@@ -350,7 +369,7 @@ int zipped_input(const Args &args)
   return dir_input(new_args);
 }
 
-int main(int argc, char * argv[])
+int main(int argc, char* argv[])
 {
   Args args;
   args.ext = ".nii.gz"; // default extension
@@ -389,7 +408,7 @@ int main(int argc, char * argv[])
     }
     args.ext = extArg.getValue();
     if (tmpdir.isSet()) {
-        args.tmpdir = tmpdir.getValue();
+      args.tmpdir = tmpdir.getValue();
     }
     else {
       args.tmpdir = "";
@@ -400,7 +419,7 @@ int main(int argc, char * argv[])
       cerr << "Fatal error: Could not find input(" << args.input << ")." << endl;
       return EXIT_FAILURE;
     }
-    if (args.outdir!="" && !fs::exists(args.outdir)) {
+    if (args.outdir != "" && !fs::exists(args.outdir)) {
       cerr << "Fatal error: Could not find outdir(" << args.outdir << ")." << endl;
       return EXIT_FAILURE;
     }
@@ -412,9 +431,17 @@ int main(int argc, char * argv[])
       return dir_input(args);
     }
   }
-  catch (TCLAP::ArgException &e)
+  catch (TCLAP::ArgException& e)
   {
     std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl;
+  }
+  catch (std::exception& e) {
+    cerr << e.what() << endl;
+    return 1;
+  }
+  catch (const std::string& e) {
+    cerr << e << endl;
+    return 1;
   }
   return 0;
 }
