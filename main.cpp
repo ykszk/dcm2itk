@@ -254,7 +254,6 @@ int dir_input(const Args& args)
       imageio->ReadImageInformation();
       auto& meta = imageio->GetMetaDataDictionary();
       auto modality = get_value(meta, "0008|0060");
-      auto units = get_value(meta, "0054|1001");
       if (modality == "PT") {
         cout << "Convert to SUV" << endl;
         for (auto& filename : fileNames) {
