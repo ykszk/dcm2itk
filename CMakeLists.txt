@@ -11,8 +11,13 @@ include(${ITK_USE_FILE})
 include_directories(deps/tclap/include)
 
 SET(ZLIB_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/deps/zlib-ng;${CMAKE_SOURCE_DIR}/deps/build/zlib-ng")
+IF (WIN32)
 SET(ZLIB_LIBRARY_DEBUG "${CMAKE_SOURCE_DIR}/deps/build/zlib-ng/Debug/zlibstaticd.lib")
 SET(ZLIB_LIBRARY_RELEASE "${CMAKE_SOURCE_DIR}/deps/build/zlib-ng/Release/zlibstatic.lib")
+ELSE()
+SET(ZLIB_LIBRARY_DEBUG "${CMAKE_SOURCE_DIR}/deps/build/zlib-ng/libz.a")
+SET(ZLIB_LIBRARY_RELEASE "${CMAKE_SOURCE_DIR}/deps/build/zlib-ng/libz.a")
+ENDIF()
 
 SET(ZLIB_COMPAT ON CACHE BOOL "COMPAT")
 SET(MZ_COMPAT OFF CACHE BOOL "Disable")
