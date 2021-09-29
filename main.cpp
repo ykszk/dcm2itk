@@ -15,6 +15,7 @@
 #include <tclap/CmdLine.h>
 #include <config.h>
 #include <cctype>
+#include <thread>
 #include "utils.h"
 
 struct Args {
@@ -87,7 +88,10 @@ public:
   static TempDir New()
   {
     auto base_temp_dir = fs::temp_directory_path();
-    return TempDir(get_available_name(base_temp_dir, "tmpzip", ""));
+    auto tid = std::this_thread::get_id();
+    std::stringstream ss;
+    ss << tid;
+    return TempDir(get_available_name(base_temp_dir, ss.str() + "tmpzip", ""));
   }
   static TempDir New(const std::string& tmpdir)
   {
