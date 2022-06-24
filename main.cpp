@@ -54,6 +54,7 @@ public:
   ~ZipReader()
   {
     mz_zip_reader_close(zip_reader);
+    mz_stream_os_close(file_stream);
     mz_stream_os_delete(&file_stream);
     mz_zip_reader_delete(&zip_reader);
   }
