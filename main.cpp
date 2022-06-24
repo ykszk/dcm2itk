@@ -77,30 +77,38 @@ class TempDir
 {
 public:
   fs::path path;
-  TempDir(const fs::path& p)
+  TempDir(const fs::path &p, bool mkdir)
+      : path(p)
   {
-    path = p;
-    fs::create_directories(p);
+    if (mkdir)
+    {
+      fs::create_directories(p);
+    }
   }
   ~TempDir()
   {
     fs::remove_all(path);
   }
-  static TempDir New()
+  void MakeDir() {
+    if (!fs::exists(path)) {
+      fs::create_directories(path);
+    }
+  }
+  static TempDir New(bool mkdir=true)
   {
     auto base_temp_dir = fs::temp_directory_path();
     auto tid = std::this_thread::get_id();
     std::stringstream ss;
     ss << tid;
-    return TempDir(get_available_name(base_temp_dir, ss.str() + "tmpzip", ""));
+    return TempDir(get_available_name(base_temp_dir, ss.str() + "tmpzip", ""), mkdir);
   }
-  static TempDir New(const std::string& tmpdir)
+  static TempDir New(const std::string& tmpdir, bool mkdir=true)
   {
     if (tmpdir.empty()) {
-      return New();
+      return New(mkdir);
     }
     else {
-      return TempDir(get_available_name(tmpdir, "tmpzip", ""));
+      return TempDir(get_available_name(tmpdir, "tmpzip", ""), mkdir);
     }
   }
 };
@@ -219,9 +227,10 @@ std::string rstrip(const std::string s)
   return std::string(s.begin(), end_it.base());
 }
 
-int dir_input(const Args& args)
+int dir_input(const Args& args, bool overwrite_allowed)
 {
   std::string dirName = args.input;
+  auto temp_dir = TempDir::New(args.tmpdir, false);
 
   using NamesGeneratorType = itk::GDCMSeriesFileNames;
   NamesGeneratorType::Pointer nameGenerator = NamesGeneratorType::New();
@@ -231,6 +240,7 @@ int dir_input(const Args& args)
   nameGenerator->AddSeriesRestriction("0008|0021");
   nameGenerator->SetGlobalWarningDisplay(false);
   nameGenerator->SetDirectory(dirName);
+
 
   try
   {
@@ -274,8 +284,13 @@ int dir_input(const Args& args)
       auto& meta = imageio->GetMetaDataDictionary();
       auto modality = get_value(meta, "0008|0060");
       if (modality == "PT") {
+        if (!overwrite_allowed) {
+          cout << "Create temporary directory for PET: " << temp_dir.path.string() << endl;
+          temp_dir.MakeDir();
+        }
         cout << "Convert to SUV" << endl;
-        for (auto& filename : fileNames) {
+        for (int i=0; i < fileNames.size(); ++i) {
+          auto &filename = fileNames[i];
           gdcm::Reader reader;
           reader.SetFileName(filename.c_str());
           if (!reader.Read())
@@ -293,6 +308,9 @@ int dir_input(const Args& args)
           rescale_slope(dcm, SUVbwScaleFactor);
           gdcm::Writer writer;
           writer.CheckFileMetaInformationOff();
+          if (!overwrite_allowed) {
+            filename = (temp_dir.path / std::to_string(i)).string();
+          }
           writer.SetFileName(filename.c_str());
           writer.SetFile(dcm);
           if (!writer.Write()) {
@@ -395,7 +413,8 @@ int zipped_input(const Args& args)
   mz_zip_reader_save_all(reader.zip_reader, temp_dir_str.c_str());
   Args new_args(args);
   new_args.input = temp_dir_str;
-  return dir_input(new_args);
+  // overwrite_allowed=true because unzipped files are temporary.
+  return dir_input(new_args, true);
 }
 
 int main(int argc, char* argv[])
@@ -459,7 +478,7 @@ int main(int argc, char* argv[])
       return zipped_input(args);
     }
     else {
-      return dir_input(args);
+      return dir_input(args, false);
     }
   }
   catch (TCLAP::ArgException& e)
