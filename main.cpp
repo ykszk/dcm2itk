@@ -403,7 +403,7 @@ int main(int argc, char* argv[])
   args.ext = ".nii.gz"; // default extension
 
   try {
-    TCLAP::CmdLine cmd("Simple DICOM to ITK image converter", ' ', PROJECT_VERSION);
+    TCLAP::CmdLine cmd("Simple DICOM to ITK image converter", ' ', PROJECT_VERSION " bulit in " __DATE__);
 
     TCLAP::UnlabeledValueArg<std::string> inputDir("input", "Input directory or zip file containing dicom files", true, "", "input");
     cmd.add(inputDir);
