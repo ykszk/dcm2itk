@@ -105,7 +105,7 @@ public:
 };
 using FileNamesContainer = std::vector<std::string>;
 
-template <typename PixelType, int Dimension>
+template <typename ImageType>
 void _read_n_write(const FileNamesContainer& fileNames, const std::string outFileName, bool compress = true)
 {
   //  auto imageio = itk::ImageIOFactory::CreateImageIO(fileNames.front().c_str(), itk::ImageIOFactory::FileModeType::ReadMode);
@@ -116,7 +116,6 @@ void _read_n_write(const FileNamesContainer& fileNames, const std::string outFil
   imageio->ReadImageInformation();
 
   auto& meta = imageio->GetMetaDataDictionary();
-  using ImageType = itk::Image<PixelType, Dimension>;
 
   using ReaderType = itk::ImageSeriesReader<ImageType>;
   typename ReaderType::Pointer reader = ReaderType::New();
@@ -142,23 +141,38 @@ void _read_n_write(const FileNamesContainer& fileNames, const std::string outFil
 }
 
 template <int Dimension>
+int read_n_write_color(const FileNamesContainer& fileNames, const std::string outFileName, itk::ImageIOBase::IOComponentType componentType, bool compress, bool is_rgba)
+{
+  constexpr int dim = Dimension;
+  if (componentType != itk::ImageIOBase::UCHAR) {
+    cerr << "Unsupported component type:" << itk::ImageIOBase::GetComponentTypeAsString(componentType) << endl;
+    return 1;
+  }
+  if (is_rgba) {
+    _read_n_write<itk::Image<itk::RGBAPixel<uint8_t>, dim>>(fileNames, outFileName);
+  }
+  else {
+    _read_n_write<itk::Image<itk::RGBPixel<uint8_t>, dim>>(fileNames, outFileName);
+  }
+  return 0;
+}
+
+template <int Dimension>
 int read_n_write(const FileNamesContainer& fileNames, const std::string outFileName, itk::ImageIOBase::IOComponentType componentType, bool compress)
 {
   /// UINT8 -> UINT8, SHORT -> SHORT, INT -> SHORT, FLOAT -> FLOAT, DOUBLE -> FLOAT
   constexpr int dim = Dimension;
   switch (componentType) {
   case itk::ImageIOBase::UCHAR:
-    _read_n_write<uint8_t, dim>(fileNames, outFileName);
+    _read_n_write<itk::Image<uint8_t, dim>>(fileNames, outFileName);
     return 0;
   case itk::ImageIOBase::SHORT:
-    _read_n_write<int16_t, dim>(fileNames, outFileName);
-    return 0;
   case itk::ImageIOBase::INT:
-    _read_n_write<int16_t, dim>(fileNames, outFileName);
+    _read_n_write<itk::Image<int16_t, dim>>(fileNames, outFileName);
     return 0;
   case itk::ImageIOBase::FLOAT:
   case itk::ImageIOBase::DOUBLE:
-    _read_n_write<float, dim>(fileNames, outFileName, compress | false);
+    _read_n_write<itk::Image<float, dim>>(fileNames, outFileName, compress | false);
     return 0;
   default:
     cerr << "Unsupported component type:" << itk::ImageIOBase::GetComponentTypeAsString(componentType) << endl;
@@ -329,15 +343,27 @@ int dir_input(const Args& args)
         cerr << "Invalid image dimension:" << dimension;
         return 1;
       }
-      if (pixelType != itk::ImageIOBase::SCALAR) {
-        cerr << "Invalid pixel type:" << itk::ImageIOBase::GetPixelTypeAsString(pixelType) << endl;
-        return 1;
-      }
-      using IOBase = itk::ImageIOBase;
-
-      if (numberOfComponents != 1) {
+      if (numberOfComponents != 1 && numberOfComponents != 3 && numberOfComponents != 4) {
         cerr << "Invalid num of components:" << numberOfComponents << endl;
       }
+
+      using IOBase = itk::ImageIOBase;
+      if (pixelType == IOBase::RGB || pixelType == IOBase::RGBA) {
+        switch (dimension) {
+        case 2:
+          read_n_write_color<2>(fileNames, outFileName, componentType, args.compress, pixelType==IOBase::RGBA);
+          break;
+        case 3:
+          read_n_write_color<3>(fileNames, outFileName, componentType, args.compress, pixelType==IOBase::RGBA);
+          break;
+        }
+        continue;
+      }
+      if (pixelType != IOBase::SCALAR) {
+        cerr << "Invalid pixel type:" << IOBase::GetPixelTypeAsString(pixelType) << endl;
+        return 1;
+      }
+
       switch (dimension) {
       case 2:
         read_n_write<2>(fileNames, outFileName, componentType, args.compress);
