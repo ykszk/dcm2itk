@@ -18,13 +18,19 @@
 #include <thread>
 #include "utils.h"
 
+enum class Compress {
+  Auto,
+  Compress,
+  Raw,
+};
+
 struct Args {
   std::string input;
   std::string output;
   std::string outdir;
   std::string tmpdir;
   std::string ext;
-  bool compress;
+  Compress compress;
 };
 
 namespace fs = std::filesystem;
@@ -115,7 +121,7 @@ public:
 using FileNamesContainer = std::vector<std::string>;
 
 template <typename ImageType>
-void _read_n_write(const FileNamesContainer& fileNames, const std::string outFileName, bool compress = true)
+void _read_n_write(const FileNamesContainer& fileNames, const std::string outFileName, bool compress)
 {
   //  auto imageio = itk::ImageIOFactory::CreateImageIO(fileNames.front().c_str(), itk::ImageIOFactory::FileModeType::ReadMode);
   auto imageio = itk::GDCMImageIO::New();
@@ -150,38 +156,52 @@ void _read_n_write(const FileNamesContainer& fileNames, const std::string outFil
 }
 
 template <int Dimension>
-int read_n_write_color(const FileNamesContainer& fileNames, const std::string outFileName, itk::ImageIOBase::IOComponentType componentType, bool compress, bool is_rgba)
+int read_n_write_color(const FileNamesContainer& fileNames, const std::string outFileName, itk::ImageIOBase::IOComponentType componentType, Compress compress, bool is_rgba)
 {
   constexpr int dim = Dimension;
+  bool comp = true;
+  if (compress == Compress::Raw) {
+    comp = false;
+  }
   if (componentType != itk::ImageIOBase::UCHAR) {
     cerr << "Unsupported component type:" << itk::ImageIOBase::GetComponentTypeAsString(componentType) << endl;
     return 1;
   }
   if (is_rgba) {
-    _read_n_write<itk::Image<itk::RGBAPixel<uint8_t>, dim>>(fileNames, outFileName);
+    _read_n_write<itk::Image<itk::RGBAPixel<uint8_t>, dim>>(fileNames, outFileName, comp);
   }
   else {
-    _read_n_write<itk::Image<itk::RGBPixel<uint8_t>, dim>>(fileNames, outFileName);
+    _read_n_write<itk::Image<itk::RGBPixel<uint8_t>, dim>>(fileNames, outFileName, comp);
   }
   return 0;
 }
 
 template <int Dimension>
-int read_n_write(const FileNamesContainer& fileNames, const std::string outFileName, itk::ImageIOBase::IOComponentType componentType, bool compress)
+int read_n_write(const FileNamesContainer& fileNames, const std::string outFileName, itk::ImageIOBase::IOComponentType componentType, Compress compress)
 {
   /// UINT8 -> UINT8, SHORT -> SHORT, INT -> SHORT, FLOAT -> FLOAT, DOUBLE -> FLOAT
   constexpr int dim = Dimension;
+  bool comp = compress == Compress::Compress;
   switch (componentType) {
   case itk::ImageIOBase::UCHAR:
-    _read_n_write<itk::Image<uint8_t, dim>>(fileNames, outFileName);
+    if (compress == Compress::Auto) {
+      comp = true;
+    }
+    _read_n_write<itk::Image<uint8_t, dim>>(fileNames, outFileName, comp);
     return 0;
   case itk::ImageIOBase::SHORT:
   case itk::ImageIOBase::INT:
-    _read_n_write<itk::Image<int16_t, dim>>(fileNames, outFileName);
+    if (compress == Compress::Auto) {
+      comp = true;
+    }
+    _read_n_write<itk::Image<int16_t, dim>>(fileNames, outFileName, comp);
     return 0;
   case itk::ImageIOBase::FLOAT:
   case itk::ImageIOBase::DOUBLE:
-    _read_n_write<itk::Image<float, dim>>(fileNames, outFileName, compress | false);
+    if (compress == Compress::Auto) {
+      comp = false;
+    }
+    _read_n_write<itk::Image<float, dim>>(fileNames, outFileName, comp);
     return 0;
   default:
     cerr << "Unsupported component type:" << itk::ImageIOBase::GetComponentTypeAsString(componentType) << endl;
@@ -436,6 +456,7 @@ int main(int argc, char* argv[])
     TCLAP::ValueArg<std::string> extArg("e", "ext", "File extension. default: (" + args.ext + ")", false, args.ext, "ext");
     cmd.add(extArg);
     TCLAP::SwitchArg compressSwitch("","compress","Force compression.", cmd, false);
+    TCLAP::SwitchArg rawSwitch("","raw","Force raw(uncompression).", cmd, false);
 
     cmd.parse(argc, argv);
 
@@ -456,14 +477,25 @@ int main(int argc, char* argv[])
       }
     }
     args.ext = extArg.getValue();
-    args.compress = compressSwitch;
+    if (compressSwitch.isSet() && rawSwitch.isSet()) {
+      cerr << "Cannot specify both --compress and --raw." << endl;
+      return EXIT_FAILURE;
+    }
+    if (compressSwitch) {
+      args.compress = Compress::Compress;
+    }
+    else if (rawSwitch) {
+      args.compress = Compress::Raw;
+    }
+    else {
+      args.compress = Compress::Auto;
+    }
     if (tmpdir.isSet()) {
       args.tmpdir = tmpdir.getValue();
     }
     else {
       args.tmpdir = "";
     }
-
 
     if (!fs::exists(args.input)) {
       cerr << "Fatal error: Could not find input(" << args.input << ")." << endl;
