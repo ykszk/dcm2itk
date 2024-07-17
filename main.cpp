@@ -179,7 +179,7 @@ int read_n_write_color(const FileNamesContainer& fileNames, const std::string ou
 template <int Dimension>
 int read_n_write(const FileNamesContainer& fileNames, const std::string outFileName, itk::ImageIOBase::IOComponentType componentType, Compress compress)
 {
-  /// UINT8 -> UINT8, SHORT -> SHORT, INT -> SHORT, FLOAT -> FLOAT, DOUBLE -> FLOAT
+  /// UINT8 -> UINT8, SHORT -> SHORT, INT -> SHORT, USHORT -> SHORT, FLOAT -> FLOAT, DOUBLE -> FLOAT
   constexpr int dim = Dimension;
   bool comp = compress == Compress::Compress;
   switch (componentType) {
@@ -195,6 +195,12 @@ int read_n_write(const FileNamesContainer& fileNames, const std::string outFileN
       comp = true;
     }
     _read_n_write<itk::Image<int16_t, dim>>(fileNames, outFileName, comp);
+    return 0;
+  case itk::ImageIOBase::USHORT:
+    if (compress == Compress::Auto) {
+      comp = true;
+    }
+    _read_n_write<itk::Image<uint16_t, dim>>(fileNames, outFileName, comp);
     return 0;
   case itk::ImageIOBase::FLOAT:
   case itk::ImageIOBase::DOUBLE:
